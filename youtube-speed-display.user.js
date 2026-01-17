@@ -3,10 +3,10 @@
 // @name:zh-CN   YouTube 网速显示
 // @name:zh-TW   YouTube 網速顯示
 // @namespace    https://greasyfork.org/scripts/562975-youtube-speed-mbps
-// @version      1.1.0
-// @description  Display real-time connection speed in the YouTube player UI. Supports MB/s and Mbps formats - click to switch!
-// @description:zh-CN  在 YouTube 播放器界面直接显示实时连接速度，支持 MB/s 和 Mbps 两种格式，点击即可切换。
-// @description:zh-TW  在 YouTube 播放器介面直接顯示即時連線速度，支援 MB/s 和 Mbps 兩種格式，點擊即可切換。
+// @version      1.2.0
+// @description  Display real-time connection speed (MB/s) in the YouTube player UI without opening Stats for nerds. Shows download speed directly in the player controls for easy monitoring.
+// @description:zh-CN  在 YouTube 播放器界面直接显示实时连接速度 (MB/s)，无需打开"详细统计信息"。速度数值显示在播放器控制栏中，方便随时监控网络状态。
+// @description:zh-TW  在 YouTube 播放器介面直接顯示即時連線速度 (MB/s)，無需開啟「詳細統計資訊」。速度數值顯示在播放器控制列中，方便隨時監控網路狀態。
 // @author       nodeseek
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
@@ -15,41 +15,28 @@
 // @run-at       document-idle
 // @license      MIT
 // @icon         https://www.youtube.com/favicon.ico
+// @supportURL   https://greasyfork.org/scripts/562975/feedback
+// @homepageURL  https://greasyfork.org/scripts/562975
 // ==/UserScript==
 
 (function() {
     'use strict';
 
     // ==================== Configuration ====================
-    const WIDGET_ID = "yt-speed-display-widget";
+    const WIDGET_ID = "yt-speed-mbs-widget";
     const UPDATE_MS = 1000;
     const ROUTE_POLL_MS = 400;
     const DEBUG = new URL(location.href).searchParams.get("yt_speed_debug") === "1";
 
-    // Speed unit options
-    const UNITS = {
-        MBps: {
-            name: "MB/s",
-            convert: (kbps) => kbps / 8 / 1024,
-            format: (value) => `${value.toFixed(2)} MB/s`
-        },
-        Mbps: {
-            name: "Mbps",
-            convert: (kbps) => kbps / 1000,
-            format: (value) => `${value.toFixed(2)} Mbps`
-        }
-    };
-
     // ==================== State Variables ====================
-    let currentUnit = GM_getValue("speedUnit", "Mbps");
-    let lastKbps = 0;
+    let lastText = "0.00 MB/s";
     let lastGoodAt = 0;
     let active = false;
     let lastRouteKey = "";
 
     // ==================== Utility Functions ====================
     function log(...args) {
-        if (DEBUG) console.log("[YT Speed]", ...args);
+        if (DEBUG) console.log("[YT Speed MB/s]", ...args);
     }
 
     function $(sel, root = document) {
@@ -65,14 +52,6 @@
         return document.getElementById("movie_player")
             || $("ytd-player #movie_player")
             || $("#movie_player");
-    }
-
-    function formatSpeed(kbps) {
-        if (kbps <= 0 || !Number.isFinite(kbps)) {
-            return `-- ${UNITS[currentUnit].name}`;
-        }
-        const converted = UNITS[currentUnit].convert(kbps);
-        return UNITS[currentUnit].format(converted);
     }
 
     // ==================== Speed Reading Functions ====================
@@ -214,8 +193,8 @@
     function createWidget(mode) {
         const el = document.createElement("span");
         el.id = WIDGET_ID;
-        el.textContent = formatSpeed(lastKbps);
-        el.setAttribute("title", "Click to switch MB/s ↔ Mbps");
+        el.textContent = lastText;
+        el.setAttribute("aria-label", "Connection speed (MB/s)");
         el.style.cssText = `
             display: inline-flex;
             align-items: center;
@@ -224,27 +203,12 @@
             line-height: 1;
             color: #fff;
             user-select: none;
-            cursor: pointer;
+            pointer-events: none;
             font-variant-numeric: tabular-nums;
             white-space: nowrap;
             box-sizing: border-box;
             text-shadow: none;
-            transition: opacity 0.15s;
         `;
-
-        // Click to switch units
-        el.addEventListener("click", (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            currentUnit = currentUnit === "MBps" ? "Mbps" : "MBps";
-            GM_setValue("speedUnit", currentUnit);
-            el.textContent = formatSpeed(lastKbps);
-            log("Unit switched to:", currentUnit);
-        });
-
-        // Hover effect
-        el.addEventListener("mouseenter", () => { el.style.opacity = "0.7"; });
-        el.addEventListener("mouseleave", () => { el.style.opacity = "1"; });
 
         if (mode === "controls" || mode === "controls-fallback") {
             el.style.height = "100%";
@@ -255,10 +219,8 @@
             el.style.right = "12px";
             el.style.bottom = "54px";
             el.style.zIndex = "999999";
-            el.style.padding = "2px 6px";
+            el.style.padding = "0";
             el.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
-            el.style.background = "rgba(0,0,0,0.5)";
-            el.style.borderRadius = "3px";
         }
         return el;
     }
@@ -305,6 +267,12 @@
         if (w) w.remove();
     }
 
+    function setText(text) {
+        lastText = text;
+        const w = document.getElementById(WIDGET_ID) || ensureWidgetMounted();
+        if (w && w.textContent !== text) w.textContent = text;
+    }
+
     // ==================== Speed Update Functions ====================
     function updateSpeed() {
         if (!active) return;
@@ -313,20 +281,16 @@
         const kbps = typeof res.kbps === "number" ? res.kbps : null;
 
         if (kbps == null || !Number.isFinite(kbps) || kbps <= 0) {
-            if (Date.now() - lastGoodAt >= 10000) {
-                lastKbps = 0;
-            }
+            if (Date.now() - lastGoodAt < 10000) setText(lastText);
+            else setText("N/A MB/s");
             if (DEBUG && res.reason) log("no kbps:", res.reason);
-        } else {
-            lastKbps = kbps;
-            lastGoodAt = Date.now();
+            return;
         }
 
-        const w = document.getElementById(WIDGET_ID) || ensureWidgetMounted();
-        if (w) {
-            const text = formatSpeed(lastKbps);
-            if (w.textContent !== text) w.textContent = text;
-        }
+        const mbps = kbps / 8 / 1024;
+        const text = `${mbps.toFixed(2)} MB/s`;
+        lastGoodAt = Date.now();
+        setText(text);
 
         if (DEBUG && res.meta) log("kbps:", kbps, "meta:", res.meta);
     }
@@ -335,7 +299,6 @@
     function onRouteChange() {
         active = isTargetRoute();
         lastGoodAt = 0;
-        lastKbps = 0;
 
         if (!active) {
             removeWidget();
@@ -365,5 +328,5 @@
     lastRouteKey = (location.pathname || "") + "|" + (location.search || "");
     onRouteChange();
 
-    log("YouTube Speed Display loaded, unit:", currentUnit);
+    log("YouTube Speed MB/s userscript loaded");
 })();
