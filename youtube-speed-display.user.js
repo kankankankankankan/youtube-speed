@@ -2,7 +2,7 @@
 // @name         YouTube Speed Display
 // @name:zh-CN   YouTube 网速显示
 // @name:zh-TW   YouTube 網速顯示
-// @namespace    https://greasyfork.org/users/your-username
+// @namespace    https://greasyfork.org/scripts/562975-youtube-speed-mbps
 // @version      1.1.0
 // @description  Display real-time connection speed in the YouTube player UI. Supports MB/s and Mbps formats - click to switch!
 // @description:zh-CN  在 YouTube 播放器界面直接显示实时连接速度，支持 MB/s 和 Mbps 两种格式，点击即可切换。

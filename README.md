@@ -14,5 +14,5 @@
 ### 安装
 
 1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 或 [Violentmonkey](https://violentmonkey.github.io/)
-2. 脚本[传送门](https://greasyfork.org/zh-CN/scripts/562975-youtube-speed-display)点击本页安装按钮
+2. 脚本[传送门](https://greasyfork.org/scripts/562975-youtube-speed-display)点击本页安装按钮
 3. 完成！
