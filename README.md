@@ -8,7 +8,7 @@
 
 ### 效果预览
 
-![预览](https://github.com/kankankankankankan/youtube-speed/blob/main/preview.gif?raw=true)
+![预览](https://github.com/kankankankankankan/youtube-speed/blob/main/preview.png)
 
 
 ### 安装
