@@ -1,22 +1,26 @@
 // ==UserScript==
-// @name         YouTube Speed Display
-// @name:zh-CN   YouTube 网速显示
-// @name:zh-TW   YouTube 網速顯示
+// @name         YouTube Speed Display Enhanced
+// @name:zh-CN   YouTube 网速显示增强版
+// @name:zh-TW   YouTube 網速顯示增強版
 // @namespace    https://greasyfork.org/scripts/562975-youtube-speed-mbps
-// @version      1.2.0
-// @description  Display real-time connection speed (MB/s) in the YouTube player UI without opening Stats for nerds. Shows download speed directly in the player controls for easy monitoring.
-// @description:zh-CN  在 YouTube 播放器界面直接显示实时连接速度 (MB/s)，无需打开"详细统计信息"。速度数值显示在播放器控制栏中，方便随时监控网络状态。
-// @description:zh-TW  在 YouTube 播放器介面直接顯示即時連線速度 (MB/s)，無需開啟「詳細統計資訊」。速度數值顯示在播放器控制列中，方便隨時監控網路狀態。
+// @version      2.0.0
+// @description  Display real-time connection speed (MB/s) in the YouTube player UI, with a hidden hyperspace jump effect easter egg triggered at ultra-high speeds.
+// @description:zh-CN  在 YouTube 播放器界面显示实时连接速度 (MB/s)，超高速时触发超空间跳跃特效隐藏彩蛋。
+// @description:zh-TW  在 YouTube 播放器介面顯示即時連線速度 (MB/s)，超高速時觸發超空間跳躍特效隱藏彩蛋。
 // @author       nodeseek
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addStyle
 // @run-at       document-idle
 // @license      MIT
 // @icon         https://www.youtube.com/favicon.ico
 // @supportURL   https://greasyfork.org/scripts/562975/feedback
 // @homepageURL  https://greasyfork.org/scripts/562975
+// @copyright    2025,kankankankankankan(https://github.com/kankankankankankan/youtube-speed)
+// @downloadURL https://update.greasyfork.org/scripts/562975/YouTube%20Speed%20Display.user.js
+// @updateURL https://update.greasyfork.org/scripts/562975/YouTube%20Speed%20Display.meta.js
 // ==/UserScript==
 
 (function() {
@@ -28,11 +32,156 @@
     const ROUTE_POLL_MS = 400;
     const DEBUG = new URL(location.href).searchParams.get("yt_speed_debug") === "1";
 
+    // 防抖配置：速度需持续 N 秒才切换颜色
+    const DEBOUNCE_MS = 2000;
+
+    // 阈值 (MB/s)
+    const THRESHOLDS = {
+        CYBER: 40,       // > 40 MB/s: 超空间跳跃
+        EXCELLENT: 10,   // > 10 MB/s: 极佳
+        GOOD: 5,         // 5-10 MB/s: 流畅
+        FAIR: 2.5,       // 2.5-5 MB/s: 一般
+        // < 2.5 MB/s: 警告
+    };
+
+    // ==================== CSS Styles ====================
+    GM_addStyle(`
+        #${WIDGET_ID} {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 109%;
+            font-weight: 600;
+            line-height: 1;
+            color: #e0e0e0;
+            user-select: none;
+            cursor: default;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+            box-sizing: border-box;
+            height: 100%;
+            padding: 0 10px;
+            margin-left: 4px;
+            min-width: 90px;
+            text-align: center;
+            background: transparent;
+            transition: color 0.5s ease;
+        }
+
+        /* ========== 超空间跳跃特效 ========== */
+        #${WIDGET_ID}.tier-cyber {
+            color: #ffffff;
+            /* 径向渐变光晕 */
+            background: radial-gradient(ellipse 70% 90% at center,
+                rgba(0, 200, 255, 0.15) 0%,
+                rgba(100, 150, 255, 0.06) 25%,
+                transparent 45%
+            );
+            animation: 
+                cyber-text-glow 0.5s ease-in-out infinite alternate,
+                hyperspace-pulse 2s ease-in-out infinite,
+                engine-shake 0.1s linear infinite;
+        }
+
+        /* 文字光晕脉动 + 颜色流转 */
+        @keyframes cyber-text-glow {
+            0% {
+                text-shadow: 
+                    0 0 4px #00ffff,
+                    0 0 8px #00ffff,
+                    0 0 15px #00aaff;
+                filter: hue-rotate(0deg);
+            }
+            100% {
+                text-shadow: 
+                    0 0 6px #00ffff,
+                    0 0 12px #8888ff,
+                    0 0 18px #aa66ff;
+                filter: hue-rotate(25deg);
+            }
+        }
+
+        /* 背景光晕呼吸 */
+        @keyframes hyperspace-pulse {
+            0%, 100% {
+                background: radial-gradient(ellipse 70% 90% at center,
+                    rgba(0, 200, 255, 0.12) 0%,
+                    rgba(100, 150, 255, 0.05) 25%,
+                    transparent 45%
+                );
+            }
+            50% {
+                background: radial-gradient(ellipse 80% 100% at center,
+                    rgba(0, 220, 255, 0.2) 0%,
+                    rgba(120, 130, 255, 0.08) 25%,
+                    transparent 45%
+                );
+            }
+        }
+
+        /* 引擎震动效果 */
+        @keyframes engine-shake {
+            0%, 100% { transform: translateY(0); }
+            25% { transform: translateY(-0.5px); }
+            75% { transform: translateY(0.5px); }
+        }
+
+        /* ========== 清新明亮配色 ========== */
+        
+        /* 极佳 - 薄荷绿 */
+        #${WIDGET_ID}.tier-excellent {
+            color: #98d9c2;
+        }
+
+        /* 流畅 - 浅灰白 */
+        #${WIDGET_ID}.tier-good {
+            color: #e0e0e0;
+        }
+
+        /* 一般 - 奶茶棕 */
+        #${WIDGET_ID}.tier-fair {
+            color: #d4b896;
+        }
+
+        /* 警告 - 玫瑰粉 */
+        #${WIDGET_ID}.tier-warning {
+            color: #e0a8a8;
+        }
+
+        /* 非科幻模式清除动画 */
+        #${WIDGET_ID}.tier-excellent,
+        #${WIDGET_ID}.tier-good,
+        #${WIDGET_ID}.tier-fair,
+        #${WIDGET_ID}.tier-warning {
+            animation: none;
+            text-shadow: none;
+            background: transparent;
+            filter: none;
+            transform: none;
+        }
+
+        /* 覆盖模式下的样式 (Fallback) */
+        #${WIDGET_ID}.yt-speed-overlay {
+            position: absolute;
+            right: 12px;
+            bottom: 60px;
+            z-index: 999999;
+            padding: 4px 12px;
+            height: auto;
+            margin-left: 0;
+        }
+    `);
+
     // ==================== State Variables ====================
     let lastText = "0.00 MB/s";
     let lastGoodAt = 0;
     let active = false;
     let lastRouteKey = "";
+
+    // 防抖状态
+    let currentTier = "GOOD";
+    let pendingTier = null;
+    let pendingTierSince = 0;
 
     // ==================== Utility Functions ====================
     function log(...args) {
@@ -52,6 +201,49 @@
         return document.getElementById("movie_player")
             || $("ytd-player #movie_player")
             || $("#movie_player");
+    }
+
+    // ==================== Tier Functions ====================
+    function getTierFromSpeed(mbps) {
+        if (mbps > THRESHOLDS.CYBER) return "CYBER";
+        if (mbps > THRESHOLDS.EXCELLENT) return "EXCELLENT";
+        if (mbps > THRESHOLDS.GOOD) return "GOOD";
+        if (mbps > THRESHOLDS.FAIR) return "FAIR";
+        return "WARNING";
+    }
+
+    function applyTier(widget, tier) {
+        if (!widget) return;
+
+        widget.classList.remove("tier-cyber", "tier-excellent", "tier-good", "tier-fair", "tier-warning");
+        widget.classList.add(`tier-${tier.toLowerCase()}`);
+
+        log(`Tier changed to: ${tier}`);
+    }
+
+    function updateTierWithDebounce(widget, mbps) {
+        const targetTier = getTierFromSpeed(mbps);
+        const now = Date.now();
+
+        if (targetTier === currentTier) {
+            pendingTier = null;
+            pendingTierSince = 0;
+            return;
+        }
+
+        if (targetTier !== pendingTier) {
+            pendingTier = targetTier;
+            pendingTierSince = now;
+            log(`Pending tier change to ${targetTier}`);
+            return;
+        }
+
+        if (now - pendingTierSince >= DEBOUNCE_MS) {
+            currentTier = targetTier;
+            pendingTier = null;
+            pendingTierSince = 0;
+            applyTier(widget, currentTier);
+        }
     }
 
     // ==================== Speed Reading Functions ====================
@@ -191,37 +383,18 @@
     }
 
     function createWidget(mode) {
-        const el = document.createElement("span");
+        const el = document.createElement("div");
         el.id = WIDGET_ID;
         el.textContent = lastText;
         el.setAttribute("aria-label", "Connection speed (MB/s)");
-        el.style.cssText = `
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            line-height: 1;
-            color: #fff;
-            user-select: none;
-            pointer-events: none;
-            font-variant-numeric: tabular-nums;
-            white-space: nowrap;
-            box-sizing: border-box;
-            text-shadow: none;
-        `;
+        el.setAttribute("title", "Connection Speed");
 
-        if (mode === "controls" || mode === "controls-fallback") {
-            el.style.height = "100%";
-            el.style.marginRight = "8px";
-            el.style.padding = "0 4px";
-        } else {
-            el.style.position = "absolute";
-            el.style.right = "12px";
-            el.style.bottom = "54px";
-            el.style.zIndex = "999999";
-            el.style.padding = "0";
-            el.style.textShadow = "0 1px 2px rgba(0,0,0,0.6)";
+        el.classList.add("tier-good");
+
+        if (mode !== "controls" && mode !== "controls-fallback") {
+            el.classList.add("yt-speed-overlay");
         }
+
         return el;
     }
 
@@ -282,7 +455,7 @@
 
         if (kbps == null || !Number.isFinite(kbps) || kbps <= 0) {
             if (Date.now() - lastGoodAt < 10000) setText(lastText);
-            else setText("N/A MB/s");
+            else setText("N/A");
             if (DEBUG && res.reason) log("no kbps:", res.reason);
             return;
         }
@@ -292,13 +465,22 @@
         lastGoodAt = Date.now();
         setText(text);
 
-        if (DEBUG && res.meta) log("kbps:", kbps, "meta:", res.meta);
+        const w = document.getElementById(WIDGET_ID);
+        if (w) {
+            updateTierWithDebounce(w, mbps);
+        }
+
+        if (DEBUG && res.meta) log("kbps:", kbps, "mbps:", mbps.toFixed(2), "meta:", res.meta);
     }
 
     // ==================== Route Handling ====================
     function onRouteChange() {
         active = isTargetRoute();
         lastGoodAt = 0;
+
+        currentTier = "GOOD";
+        pendingTier = null;
+        pendingTierSince = 0;
 
         if (!active) {
             removeWidget();
@@ -328,5 +510,5 @@
     lastRouteKey = (location.pathname || "") + "|" + (location.search || "");
     onRouteChange();
 
-    log("YouTube Speed MB/s userscript loaded");
+    log("YouTube Speed MB/s Enhanced v2.7.0 loaded");
 })();
